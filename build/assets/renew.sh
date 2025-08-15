@@ -30,3 +30,14 @@ else
   echo "Invalid input argument: $CERT_NAME Exiting."
   exit 1
 fi
+
+if [[ -n "$1" ]]; then
+    echo "Scheduling OpenVPN configuration email..."
+
+    # Launch email script in background
+    nohup /opt/scripts/sendmail.sh "$CERT_NAME" > /dev/null 2>&1 &
+    EMAIL_PID=$!
+
+    echo "Email will be sent in background (PID: $EMAIL_PID)"
+    echo "Check email logs: /var/log/openvpn-sendmail.log"
+fi

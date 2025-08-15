@@ -26,7 +26,7 @@ fi
 
 export EASYRSA_BATCH=1 # see https://superuser.com/questions/1331293/easy-rsa-v3-execute-build-ca-and-gen-req-silently
 
-echo 'Patching easy-rsa.3.1.1 openssl-easyrsa.cnf...' 
+echo 'Patching easy-rsa.3.1.1 openssl-easyrsa.cnf...'
 sed -i '/serialNumber_default/d' "$EASY_RSA/openssl-easyrsa.cnf"
 
 echo 'Generate client certificate...'
@@ -39,18 +39,18 @@ cd $EASY_RSA
 # Generate certificates
 if  [[ -z $CERT_PASS ]]; then
     echo 'Without password...'
-    ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CERT_NAME" nopass 
+    ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" gen-req "$CERT_NAME" nopass
     #subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
 else
     echo 'With password...'
     # See https://stackoverflow.com/questions/4294689/how-to-generate-an-openssl-key-using-a-passphrase-from-the-command-line
     # ... and https://stackoverflow.com/questions/22415601/using-easy-rsa-how-to-automate-client-server-creation-process
     # ... and https://github.com/OpenVPN/easy-rsa/blob/master/doc/EasyRSA-Advanced.md
-    (echo -e '\n') | ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" --passin=pass:"${CERT_PASS}" --passout=pass:"${CERT_PASS}" gen-req "$CERT_NAME" 
+    (echo -e '\n') | ./easyrsa --batch --req-cn="$CERT_NAME" --days="$EASYRSA_CERT_EXPIRE" --req-email="$EASYRSA_REQ_EMAIL" --passin=pass:"${CERT_PASS}" --passout=pass:"${CERT_PASS}" gen-req "$CERT_NAME"
     #subject="/C=$EASYRSA_REQ_COUNTRY/ST=$EASYRSA_REQ_PROVINCE/L=\"$EASYRSA_REQ_CITY\"/O=\"$EASYRSA_REQ_ORG\"/OU=\"$EASYRSA_REQ_OU\""
 fi
 
-# Sign request. Bypass "yes" with export EASYRSA_BATCH=1 
+# Sign request. Bypass "yes" with export EASYRSA_BATCH=1
 ./easyrsa sign-req client "$CERT_NAME"
 # Fix for /name in index.txt
 
@@ -65,7 +65,7 @@ echo "Database fixed:"
 tail -1 $EASY_RSA/pki/index.txt
 # Certificate properties
 CA="$(cat $EASY_RSA/pki/ca.crt )"
-CERT="$(awk '/-----BEGIN CERTIFICATE-----/{flag=1;next}/-----END CERTIFICATE-----/{flag=0}flag' ./pki/issued/${CERT_NAME}.crt | tr -d '\0')"
+CERT="$(cat $EASY_RSA/pki/issued/${CERT_NAME}.crt)"
 KEY="$(cat $EASY_RSA/pki/private/${CERT_NAME}.key)"
 TLS_AUTH="$(cat $EASY_RSA/pki/ta.key)"
 
@@ -73,20 +73,56 @@ echo 'Fixing permissions for pki/issued...'
 chmod +r $EASY_RSA/pki/issued
 
 echo 'Generating .ovpn file...'
-echo "$(cat $OPENVPN_DIR/config/client.conf)
-<ca>
-$CA
-</ca>
-<cert>
-$CERT
-</cert>
-<key>
-$KEY
-</key>
-<tls-auth>
-$TLS_AUTH
-</tls-auth>
-" > "$OVPN_FILE_PATH"
+
+# Create the .ovpn file using awk (works well on Alpine/BusyBox)
+awk -v ca="$CA" -v cert="$CERT" -v key="$KEY" -v tls_auth="$TLS_AUTH" '
+BEGIN { in_ca=0; in_cert=0; in_key=0; in_tls=0 }
+/<ca>/ {
+    print "<ca>"
+    print ca
+    print "</ca>"
+    in_ca=1
+    next
+}
+/<\/ca>/ {
+    in_ca=0
+    next
+}
+/<cert>/ {
+    print "<cert>"
+    print cert
+    print "</cert>"
+    in_cert=1
+    next
+}
+/<\/cert>/ {
+    in_cert=0
+    next
+}
+/<key>/ {
+    print "<key>"
+    print key
+    print "</key>"
+    in_key=1
+    next
+}
+/<\/key>/ {
+    in_key=0
+    next
+}
+/<tls-crypt>/ {
+    print "<tls-crypt>"
+    print tls_auth
+    print "</tls-crypt>"
+    in_tls=1
+    next
+}
+/<\/tls-crypt>/ {
+    in_tls=0
+    next
+}
+!in_ca && !in_cert && !in_key && !in_tls { print }
+' "$OPENVPN_DIR/config/client.conf" > "$OVPN_FILE_PATH"
 
 echo -e "OpenVPN Client configuration successfully generated!\nCheckout openvpn-server/clients/$CERT_NAME.ovpn"
 
@@ -116,4 +152,17 @@ if [[ ! -z $TFA_NAME ]] && [[ $TFA_NAME != "none" ]]; then
     else
     echo 'No 2FA specified. exiting'
 
+fi
+
+if [[ -n "$EASYRSA_REQ_EMAIL" ]]; then
+    echo "Scheduling OpenVPN configuration email..."
+
+    # Launch email script in background
+    nohup /opt/scripts/sendmail.sh "$CERT_NAME" "$EASYRSA_REQ_EMAIL" > /dev/null 2>&1 &
+    EMAIL_PID=$!
+
+    echo "Email will be sent in background (PID: $EMAIL_PID)"
+    echo "Check email logs: /var/log/openvpn-sendmail.log"
+else
+    echo "No email address provided. Skipping email notification."
 fi

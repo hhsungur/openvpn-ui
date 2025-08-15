@@ -15,7 +15,7 @@
           <button type="button" class="btn btn-tool" data-card-widget="collapse">
           <i class="fa fa-minus"></i></button>
         </div>
-      </div> 
+      </div>
 
       <!-- /.box-header -->
 
@@ -103,6 +103,11 @@
                     </td>
                   {{end}}
                     <td class="align-middle">
+                  {{ if and (eq .Revocation "") (ne .Details.Name "") }}
+                      <a href="{{urlfor "CertificatesController.SendByMail" ":key" .Details.Name}}" class="btn btn-primary btn-xs" title="Send Mail" style="font-size: 80%;">Send Mail</a>
+                  {{else}}
+                      <a class="btn btn-default btn-xs" disabled>Send Mail</a>
+                  {{end}}
                   {{ if and (eq .Revocation "") (ne .Details.Name "") }}
                       <a href="{{urlfor "CertificatesController.Renew" ":key" .Details.Name ":localip" .Details.LocalIP ":serial" .Serial ":tfaname" .Details.TFAName}}" class="btn btn-primary btn-xs" title="Renew" style="font-size: 80%;">Renew</a>
                   {{else}}
@@ -260,14 +265,14 @@
               <span class="text-muted" title="Name should not have spaces.">2FA Issuer for the QR Code sting.<span>
             </div>
             {{end}}
-    
+
             <div class="form-group">
               <label for="name">Passphrase (Optional)</label>
               <input type="password" class="form-control" placeholder="Enter Password" id="password-input" id="passphrase" name="passphrase">
               <a href="#" class="password-control" title="Show or Hide Password"></a>
               <span class="text-muted">Passphrase is used for privte key protection.</span>
             </div>
-    
+
             <div class="form-group">
               <label for="name" title="IPv4 without subnet">Client Static IP (Optional)</label>
               <input type="text" class="form-control" placeholder="Enter Static IP" pattern="^(\d{1,3}\.){3}\d{1,3}$" id="staticip" name="staticip">
@@ -345,8 +350,8 @@
     <span id="helpBlock" class="text-muted">If you are revoking Certificate, don't forget to restart OpenVPN Server to disconnect all active client sessions and make revocation to take the effect.<br/></span><br>
     <a href="javascript:$.MyAPP.Restart('SIGUSR1')"  class="btn btn-warning btn-primary" style="width: 145px;" title="Conditional Restart (SIGUSR1)">Restart Server</a>
     &nbsp; OpenVPN Server Conditional Restart to reinitiate all active client sessions. <br><br>
-    <a href="{{urlfor "CertificatesController.Restart"}}" class="btn btn-danger btn-primary" style="width: 145px;" title="Restart OpenVPN container">Restart Container</a> 
-    &nbsp; OpenVPN Container Restart to re-apply Firewall rules and restart OpenVPN Server. Will take more time than regular Restart. 
+    <a href="{{urlfor "CertificatesController.Restart"}}" class="btn btn-danger btn-primary" style="width: 145px;" title="Restart OpenVPN container">Restart Container</a>
+    &nbsp; OpenVPN Container Restart to re-apply Firewall rules and restart OpenVPN Server. Will take more time than regular Restart.
   </div>
   <!-- /.box-footer -->
 </div>
@@ -398,4 +403,3 @@ $('.send-email-with-qr-btn').on('click', function () {
   window.location.href = mailtoLink;
 });
   </script>
-  
